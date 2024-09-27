@@ -1,0 +1,16 @@
+streamlit
+PyPDF2
+streamlit_pdf_viewer
+pytesseract
+langchain
+transformers
+ctransformers
+langchain==0.3.0
+langchain-community==0.3.0
+langchain-core==0.3.0
+langchain-text-splitters==0.3.0
+langsmith==0.1.121
+Pillow
+PyMuPDF
+sentence-transformers
+faiss-cpu
