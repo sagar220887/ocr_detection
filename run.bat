@@ -1,0 +1,1 @@
+call "streamlit run ocr_document_loader_template.py --server.enableXsrfProtection false"

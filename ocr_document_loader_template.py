@@ -11,23 +11,19 @@ import os
 import pathlib
 import fitz  # PyMuPDF
 
-from langchain import PromptTemplate
-from langchain.chains import RetrievalQA
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from src.helper import *
-
 from io import StringIO
 import time
 from langchain.llms import CTransformers
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
-from langchain import PromptTemplate
+# from langchain import PromptTemplate
+from langchain import HuggingFaceHub
 from langchain.chains import RetrievalQA
+# from langchain.vectorstores import FAISS
+
+from langchain_core.prompts import PromptTemplate
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-
 from langchain_community.document_loaders import UnstructuredURLLoader, MergedDataLoader
 from langchain_community.document_loaders import TextLoader
 from langchain_community.document_loaders.csv_loader import CSVLoader
@@ -35,9 +31,13 @@ from langchain_community.document_loaders import PyPDFDirectoryLoader, Directory
 from langchain_community.document_loaders import UnstructuredFileLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import pickle
-from langchain import HuggingFaceHub
-from transformers import  AutoTokenizer
-from ctransformers import AutoModelForCausalLM
+
+# from transformers import  AutoTokenizer
+# from ctransformers import AutoModelForCausalLM
+# from langchain_community.llms import HuggingFaceHub
+from langchain_community.vectorstores import FAISS
+# from langchain_community.llms import CTransformers
+# from langchain_community.embeddings import HuggingFaceEmbeddings
 
 
 ## pip install pdf2image Pillow pytesseract
@@ -286,6 +286,7 @@ def create_embeddings():
             model_name='sentence-transformers/all-MiniLM-L6-v2', 
             model_kwargs={'device':'cpu'}
     )
+    print('%%%%%%%%%%% :: Embeddings Created ::')
     return embeddings
 
 
@@ -302,6 +303,7 @@ def store_data_in_vectordb(documents, embeddings):
 
     # Saving the new vector DB
     new_knowledge_base.save_local(vector_db_directory)
+    print('%%%%%%%%%%% :: Data stored in VectorDB ::')
     return new_knowledge_base
 
 
@@ -312,17 +314,25 @@ def load_vectordb(stored_directory, embeddings):
     
 
 def get_llm_model():
-    # llm=CTransformers(
-    #         model="model/llama-2-7b-chat.ggmlv3.q4_0.bin",
-    #         model_type="llama",
-    #         config={'max_new_tokens':128,
-    #                 'temperature':0.01}
-    # )
+    try:
+        llm = HuggingFaceHub(repo_id="mistralai/Mistral-7B-Instruct-v0.2", huggingfacehub_api_token=HF_API_KEY)
+    except Exception as e:
+        print('Exception inside get_llm_model from Huggingface - ', e)
 
-    # llm = AutoModelForCausalLM.from_pretrained("./model/mistral-7b-instruct-v0.1.Q4_K_S.gguf", model_type="cpu")
-    llm = HuggingFaceHub(repo_id="mistralai/Mistral-7B-Instruct-v0.2", huggingfacehub_api_token=HF_API_KEY)
-    print('LLM model Loaded')
-    return llm
+    try:
+        llm=CTransformers(
+                model="model/llama-2-7b-chat.ggmlv3.q4_0.bin",
+                model_type="llama",
+                config={'max_new_tokens':128,
+                        'temperature':0.01}
+        )
+        # llm = AutoModelForCausalLM.from_pretrained("./model/mistral-7b-instruct-v0.1.Q4_K_S.gguf", model_type="cpu")
+        print('LLM model Loaded')
+        return llm
+    except Exception as e:
+        print('Exception inside get_llm_model from local - ', e)
+
+    return None
 
 
 
@@ -376,30 +386,34 @@ def get_similiar_docs(vector_db,query,k=1,score=False):
 
 def process_data_for_search(uploaded_files):
 
-    with st.spinner('Processing, Wait for it...'):
-    
-        # #Load the PDF File
-        documents = load_data_source_from_file(uploaded_files)
+    try:
 
-        # #Split Text into Chunks
-        st.session_state.data_chunks = get_data_chunks(documents)
-
-        # #Load the Embedding Model
-        embeddings = create_embeddings()
-
-        # #Convert the Text Chunks into Embeddings and Create a FAISS Vector Store
-        st.session_state.vector_db=store_data_in_vectordb(st.session_state.data_chunks, embeddings)
+        with st.spinner('Processing, Wait for it...'):
         
-        llm = get_llm_model()
+            # #Load the PDF File
+            documents = load_data_source_from_file(uploaded_files)
 
-        qa_prompt = get_prompt()
+            # #Split Text into Chunks
+            st.session_state.data_chunks = get_data_chunks(documents)
 
-        chain = create_chain(llm, st.session_state.vector_db, qa_prompt)
+            # #Load the Embedding Model
+            embeddings = create_embeddings()
 
-        st.text("Ready to go ...✅✅✅")
-        st.session_state.processComplete = True
+            # #Convert the Text Chunks into Embeddings and Create a FAISS Vector Store
+            st.session_state.vector_db=store_data_in_vectordb(st.session_state.data_chunks, embeddings)
+            
+            llm = get_llm_model()
 
-        return chain
+            qa_prompt = get_prompt()
+
+            chain = create_chain(llm, st.session_state.vector_db, qa_prompt)
+
+            st.text("Ready to go ...✅✅✅")
+            st.session_state.processComplete = True
+
+            return chain
+    except Exception as e:
+        print('Exception: %s' % e)
     
 
 def get_response(user_query):
@@ -421,14 +435,13 @@ def get_response(user_query):
     #     return ans
 
 
+########## UI Rendering  #################
+
+
 with st.sidebar:
     st.session_state["ocr_uploaded_data"] = ocr_file_uploader()
     display_process_btn()
 
-# if st.session_state.file_process:
-#         if st.session_state.upload_files:
-#             st.session_state.new_data_source = True
-#             st.session_state.conversation = process_for_new_data_source(st.session_state.upload_files)
 
 with st.chat_message("assistant"):
     st.write("Hello Human, How do I help U.")
@@ -445,10 +458,6 @@ if prompt := st.chat_input("Ask Question about your files."):
     st.chat_message("user").markdown(prompt)
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # print('st.session_state.new_data_source ---> ', st.session_state.new_data_source)
-    # if st.session_state.new_data_source == False:
-    #     process_for_existing_source()
 
     
     # Display assistant response in chat message container
