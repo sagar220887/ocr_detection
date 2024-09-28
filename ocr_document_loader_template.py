@@ -416,7 +416,7 @@ def process_data_for_search(uploaded_files):
         print('Exception: %s' % e)
     
 
-def get_response(user_query):
+def get_vectordb_response(user_query):
     try:
         db = st.session_state.vector_db
         similarity_search_value = db.similarity_search(user_query)
@@ -427,13 +427,16 @@ def get_response(user_query):
     except Exception as e:
         st.error('Exception inside vector similarity_search - ', e)
 
-    # if st.session_state.conversation :
-    #     result=st.session_state.conversation({'query':user_query}, return_only_outputs=True)
-    #     print('result - ', result)
-    #     ans = result['result']
-    #     print(f"Answer:{ans}")
-    #     return ans
+    
 
+
+def get_llm_response(user_query):
+    if st.session_state.conversation :
+        result=st.session_state.conversation({'query':user_query}, return_only_outputs=True)
+        print('result from llm - ', result)
+        ans = result['result']
+        print(f"Answer:{ans}")
+        return ans
 
 ########## UI Rendering  #################
 
@@ -464,7 +467,8 @@ if prompt := st.chat_input("Ask Question about your files."):
     with st.chat_message("assistant"):
         print('Inside st.chat_message("assistant")')
         with st.spinner('Processing ...'):
-            response = get_response(prompt)
+            response = get_vectordb_response(prompt)
+            # response = get_llm_response(prompt)
             st.text(response)
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})
