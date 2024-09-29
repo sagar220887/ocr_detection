@@ -1,0 +1,53 @@
+python
+
+import pytesseract
+
+from PIL import Image
+
+Copy code
+
+# Specify the path to the Tesseract executable if necessary
+
+# pytesseract .pytesseract.tesseract_cnd
+
+def extract_text_from_image(image_path):
+# Open the image file
+try:
+
+"C:\Program Files\Tesseract-OCR\tesseract.exe*
+
+with Image-open(image_path) as img:
+
+# Use pytesseract to do OCR on the image
+
+text
+
+return text
+
+except Exception as e:
+
+print(f"Error processing the image
+
+return None
+
+if _name,
+
+main":
+
+pytesseract.image_to_string(img)
+
+fey")
+
+# Specify the path to your OCR file (image)
+
+image_file = ‘path/to/your/image. png’
+
+extracted_text
+
+if extracted text:
+print("Extracted Text:")
+print(extracted_text)
+
+# Change this to your image path
+
+extract_text_from_image(image_file)

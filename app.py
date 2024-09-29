@@ -38,12 +38,13 @@ import pickle
 from langchain_community.vectorstores import FAISS
 # from langchain_community.llms import CTransformers
 # from langchain_community.embeddings import HuggingFaceEmbeddings
+import ocr_process
 
 
 ## pip install pdf2image Pillow pytesseract
 
 ###  To run this file execute below command line
-## streamlit run ocr_document_loader_template.py --server.enableXsrfProtection false
+## streamlit run app.py --server.enableXsrfProtection false
 
 
 
@@ -109,9 +110,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-def load_ocr_image(image_filename):
-    img = Image.open(image_filename)
-    return img
 
 def read_pdf(file):
     print('Inside read_pdf')
@@ -131,6 +129,8 @@ def read_pdf(file):
 # Specify the path to the Tesseract executable if necessary
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+######################## File Operations ###
+
 def write_to_file(file_name_path, text_content):
     print('Writing to file - ' + file_name_path)
     f = open(file_name_path, 'w')
@@ -138,20 +138,6 @@ def write_to_file(file_name_path, text_content):
     f.close()
     # st.write(f'## File data saved in - ', file_name_path)
     
-## TODO: write ur own custom method
-def extract_text_from_image(image_path):
-    # Open the image file
-    try:
-        with Image.open(image_path) as img:
-            # Use pytesseract to do OCR on the image
-            text = pytesseract.image_to_string(img)
-            # Write the extracted text to a file
-            write_to_file(OCR_EXTRACTED_DATA_FILE, text)
-            return text
-    except Exception as e:
-        print(f"Error processing the image: {e}")
-        return None
-
 def create_temp_file(loaded_file):
     # save the file temporarily
     temp_file = f"./tmp_{loaded_file.name}"
@@ -161,6 +147,34 @@ def create_temp_file(loaded_file):
 
 def delete_file(file_path):
     os.remove(file_path)
+
+def get_file_info_uploaded_in_streamlit(uploaded_file):
+    file_info = {
+        'filename': uploaded_file.name,
+        'file_type': uploaded_file.type,
+        'file_size': uploaded_file.size
+    }
+    return file_info
+
+####################### OCR processing functions ###
+
+def load_ocr_image(image_filename):
+    img = Image.open(image_filename)
+    return img
+
+
+def extract_text_from_image(image_path):
+    # Open the image file
+    try:
+        with Image.open(image_path) as img:
+            # Use pytesseract to do OCR on the image
+            text = pytesseract.image_to_string(img)
+            # Write the extracted text to a file
+            write_to_file('ocr_text.txt', text)
+            return text
+    except Exception as e:
+        print(f"Error processing the image: {e}")
+        return None
   
 def extarct_text_from_ocr_pdf(pdf_file):
     print('Inside extarct_text_from_ocr_pdf ===> ', pdf_file)
@@ -182,51 +196,24 @@ def extarct_text_from_ocr_pdf(pdf_file):
     except Exception as e:
         print('Exception in extarct_text_from_ocr_pdf - ', e)
 
+## TODO
 def display_ocr_data(uploaded_files):
     print('Inside display_ocr_data ===> ' + str(uploaded_files))
     for uploaded_file in uploaded_files:
-
-        file_info = {
-            'filename': uploaded_file.name,
-            'file_type': uploaded_file.type,
-            'file_size': uploaded_file.size
-        }
+        ## Display the file metadata
+        file_info = get_file_info_uploaded_in_streamlit
         st.write(file_info)
 
-        if uploaded_file.type in ['image/jpg', 'image/jpeg', 'image/png']:
-            img = load_ocr_image(uploaded_file)
-            st.image(img, caption=uploaded_file.name, width=700)
-            ocr_extracted_data = extract_text_from_image(uploaded_file)
-            st.text(ocr_extracted_data)
-        elif uploaded_file.type in ['application/pdf']:
-            # For PDF files
-            # pdf_extracted_data = read_pdf(uploaded_file)
-            # st.write(pdf_extracted_data)
+        ## Display the image file uploaded
+        ocr_image_file = ocr_process.display_ocr_file(uploaded_file)
+        st.image(ocr_image_file, caption=uploaded_file.name, width=700)
 
-            # For OCR pdf files
-            ocr_extracted_data =  extarct_text_from_ocr_pdf(uploaded_file)
-            st.text(ocr_extracted_data)
+        ## Display the contents of the image file
+        ocr_extracted_data = ocr_process.extract_ocr_data(uploaded_file)
+        st.text(ocr_extracted_data)
 
     st.session_state.conversation = process_data_for_search(OCR_EXTRACTED_DATA_FILE)
 
-    
-
-def ocr_file_uploader():
-    files_uploaded = st.file_uploader(
-        label="Upload OCR file",
-        type=['pdf', 'png', 'jpg', 'jpeg'],
-        accept_multiple_files=True
-    )
-    return files_uploaded
-
-def display_process_btn():
-    process_btn = st.button(
-        label="Process ocr Image",
-        key='ocr_process_btn',
-        on_click=display_ocr_data,
-        args=(st.session_state["ocr_uploaded_data"],)
-    )
-    return process_btn
 
 ##############################################  Chat with Document ###############################################
 
@@ -268,8 +255,6 @@ def get_loader_by_file_extension(temp_file):
 
     return loader
 
-
-
 def get_data_chunks(data):
     recursive_char_text_splitter=RecursiveCharacterTextSplitter(
                                                 chunk_size=500,
@@ -280,7 +265,6 @@ def get_data_chunks(data):
     print('documents length - ', len(documents))
     return documents
 
-
 def create_embeddings():
     embeddings=HuggingFaceEmbeddings(
             model_name='sentence-transformers/all-MiniLM-L6-v2', 
@@ -288,8 +272,6 @@ def create_embeddings():
     )
     print('%%%%%%%%%%% :: Embeddings Created ::')
     return embeddings
-
-
 
 def store_data_in_vectordb(documents, embeddings):
     try:
@@ -306,13 +288,10 @@ def store_data_in_vectordb(documents, embeddings):
     print('%%%%%%%%%%% :: Data stored in VectorDB ::')
     return new_knowledge_base
 
-
-
 def load_vectordb(stored_directory, embeddings):
     loaded_vector_db = FAISS.load_local(stored_directory, embeddings)
     return loaded_vector_db
     
-
 def get_llm_model():
     try:
         llm = HuggingFaceHub(repo_id="mistralai/Mistral-7B-Instruct-v0.2", huggingfacehub_api_token=HF_API_KEY)
@@ -333,8 +312,6 @@ def get_llm_model():
         print('Exception inside get_llm_model from local - ', e)
 
     return None
-
-
 
 def get_prompt():
     template="""Use the following pieces of information to answer the user's question.
@@ -383,7 +360,6 @@ def get_similiar_docs(vector_db,query,k=1,score=False):
     similar_docs = vector_db.similarity_search(query,k=k)
   return similar_docs
 
-
 def process_data_for_search(uploaded_files):
 
     try:
@@ -415,7 +391,6 @@ def process_data_for_search(uploaded_files):
     except Exception as e:
         print('Exception: %s' % e)
     
-
 def get_vectordb_response(user_query):
     try:
         db = st.session_state.vector_db
@@ -427,9 +402,6 @@ def get_vectordb_response(user_query):
     except Exception as e:
         st.error('Exception inside vector similarity_search - ', e)
 
-    
-
-
 def get_llm_response(user_query):
     if st.session_state.conversation :
         result=st.session_state.conversation({'query':user_query}, return_only_outputs=True)
@@ -438,7 +410,27 @@ def get_llm_response(user_query):
         print(f"Answer:{ans}")
         return ans
 
+
+
 ########## UI Rendering  #################
+    
+
+def ocr_file_uploader():
+    files_uploaded = st.file_uploader(
+        label="Upload OCR file",
+        type=['pdf', 'png', 'jpg', 'jpeg'],
+        accept_multiple_files=True
+    )
+    return files_uploaded
+
+def display_process_btn():
+    process_btn = st.button(
+        label="Process ocr Image",
+        key='ocr_process_btn',
+        on_click=display_ocr_data,
+        args=(st.session_state["ocr_uploaded_data"],)
+    )
+    return process_btn
 
 
 with st.sidebar:
@@ -468,8 +460,11 @@ if prompt := st.chat_input("Ask Question about your files."):
         print('Inside st.chat_message("assistant")')
         with st.spinner('Processing ...'):
             response = get_vectordb_response(prompt)
+            st.text('Vector Response : \n', response)
+
             # response = get_llm_response(prompt)
-            st.text(response)
+            st.text('LLM Response : \n', response)
+
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})
         
